@@ -24,8 +24,9 @@ import { MobileNav } from './components/MobileNav';
 import { SheetStatusBar } from './components/SheetStatusBar';
 import { CategoryManagerModal } from './components/CategoryManagerModal';
 import { GoogleAuthButton } from './components/GoogleAuthButton';
+import { LoginPage } from './components/LoginPage';
 import { User } from 'firebase/auth';
-import { initAuth, getCachedAccessToken } from './services/authService';
+import { initAuth, getCachedAccessToken, googleSignOut } from './services/authService';
 import {
   Plus,
   Minus,
@@ -34,6 +35,8 @@ import {
   ArrowRight,
   SlidersHorizontal,
   ExternalLink,
+  Loader2,
+  LogOut,
 } from 'lucide-react';
 
 export default function App() {
@@ -45,6 +48,7 @@ export default function App() {
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(getCachedAccessToken());
+  const [authLoading, setAuthLoading] = useState(true);
   const isDeletingRef = useRef(false);
 
   // Initialize service
@@ -90,6 +94,7 @@ export default function App() {
       (authUser, token) => {
         setUser(authUser);
         setAccessToken(token);
+        setAuthLoading(false);
         setConfig((prev) => {
           const next = { ...prev, accessToken: token, status: 'connected' as const };
           saveStoredConfig(next);
@@ -99,6 +104,8 @@ export default function App() {
       () => {
         setUser(null);
         setAccessToken(null);
+        setTransactions([]);
+        setAuthLoading(false);
       }
     );
     return () => {
@@ -106,8 +113,10 @@ export default function App() {
     };
   }, []);
 
-  // Initial load and automated background synchronization
+  // Initial load and automated background synchronization (only when user is authenticated)
   useEffect(() => {
+    if (!user || !accessToken) return;
+
     // Initial sync
     syncWithSheet();
 
@@ -135,7 +144,7 @@ export default function App() {
       document.removeEventListener('visibilitychange', onVisibilityChange);
       clearInterval(intervalId);
     };
-  }, [syncWithSheet]);
+  }, [user, accessToken, syncWithSheet]);
 
   // Financial summary calculations
   const { totalIncome, totalExpenses, netBalance } = useMemo(() => {
@@ -219,6 +228,20 @@ export default function App() {
     await sheetsService.updateCategories(newCategories);
   };
 
+  // Handler: Full sign out and privacy wipe
+  const handleSignOut = useCallback(async () => {
+    await googleSignOut();
+    setUser(null);
+    setAccessToken(null);
+    setTransactions([]);
+    setCategories({ incomeCategories: [], expenseCategories: [] });
+    setConfig({
+      spreadsheetId: '',
+      status: 'idle',
+      lastSyncedAt: null,
+    });
+  }, []);
+
   // Mobile Jump to Income
   const handleMobileJumpIncome = () => {
     setFormInitialType('Income');
@@ -230,6 +253,33 @@ export default function App() {
     setFormInitialType('Expense');
     setMobileTab('add');
   };
+
+  // Gatekeeper: Authenticating
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-neutral-950 flex flex-col items-center justify-center gap-3">
+        <Loader2 className="w-8 h-8 animate-spin text-emerald-400" />
+        <span className="text-xs text-neutral-400 font-medium tracking-wide">Loading session...</span>
+      </div>
+    );
+  }
+
+  // Gatekeeper: Not authenticated -> Show clean private login page
+  if (!user) {
+    return (
+      <LoginPage
+        onAuthSuccess={(authUser, token) => {
+          setUser(authUser);
+          setAccessToken(token);
+          setConfig((prev) => {
+            const next = { ...prev, accessToken: token, status: 'connected' as const };
+            saveStoredConfig(next);
+            return next;
+          });
+        }}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col font-sans selection:bg-emerald-500/20 selection:text-emerald-300">
@@ -292,6 +342,17 @@ export default function App() {
               <SlidersHorizontal className="w-3.5 h-3.5 text-emerald-400" />
               <span>Categories</span>
             </button>
+
+            <button
+              type="button"
+              id="top-nav-signout-btn"
+              onClick={handleSignOut}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-neutral-800 bg-neutral-900/90 text-neutral-300 hover:text-rose-400 hover:border-rose-900/60 transition-colors cursor-pointer"
+              title="Sign out and lock application"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Sign Out</span>
+            </button>
           </div>
         </div>
       </header>
@@ -314,15 +375,7 @@ export default function App() {
               });
               syncWithSheet();
             }}
-            onSignOut={() => {
-              setUser(null);
-              setAccessToken(null);
-              setConfig((prev) => {
-                const next = { ...prev, accessToken: undefined };
-                saveStoredConfig(next);
-                return next;
-              });
-            }}
+            onSignOut={handleSignOut}
             onSelectSpreadsheet={(newId) => {
               setConfig((prev) => {
                 const next = {

@@ -4,8 +4,6 @@ import {
   googleSignIn,
   googleSignOut,
   createNewFinancesSpreadsheet,
-  ALLOWED_USER_EMAIL,
-  hasPriorLogin,
 } from '../services/authService';
 import {
   ExternalLink,
@@ -137,9 +135,7 @@ export const GoogleAuthButton: React.FC<GoogleAuthButtonProps> = ({
                 />
               </svg>
             )}
-            <span className="font-semibold">
-              {hasPriorLogin() ? `Log In as ${ALLOWED_USER_EMAIL}` : 'Sign in with Google'}
-            </span>
+            <span className="font-semibold">Sign in with Google</span>
           </button>
 
           <div className="flex items-center gap-1.5 text-[11px] text-neutral-400 bg-neutral-900/80 border border-neutral-800 px-3 py-2 rounded-xl">

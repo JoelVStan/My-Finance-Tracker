@@ -21,7 +21,7 @@ export type TrendPeriod = 'daily' | 'monthly';
 export interface SheetConnectionConfig {
   spreadsheetId: string;
   accessToken?: string;
-  lastSyncedAt?: string;
-  status: 'connected' | 'syncing' | 'offline_cached' | 'error';
+  lastSyncedAt?: string | null;
+  status: 'connected' | 'syncing' | 'offline_cached' | 'error' | 'idle';
   errorMessage?: string;
 }

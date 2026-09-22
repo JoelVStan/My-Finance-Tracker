@@ -29,88 +29,11 @@ export const DEFAULT_SPREADSHEET_ID =
     ((window as unknown as { SPREADSHEET_ID?: string; __SPREADSHEET_ID__?: string }).SPREADSHEET_ID ||
       (window as unknown as { SPREADSHEET_ID?: string; __SPREADSHEET_ID__?: string }).__SPREADSHEET_ID__)) ||
   import.meta.env.VITE_SPREADSHEET_ID ||
-  'personal-finances-tracker-sheet';
+  '';
 
-// Helper to generate starter transactions for demonstration and immediate visual feedback
+// No dummy transactions: real data loaded strictly upon user Google login
 export function getInitialTransactions(): Transaction[] {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-
-  return [
-    {
-      id: 'tx-1',
-      date: `01-${month}-${year}`,
-      type: 'Income',
-      category: 'Salary',
-      amount: 75000,
-      description: 'Monthly Corporate Salary',
-    },
-    {
-      id: 'tx-2',
-      date: `03-${month}-${year}`,
-      type: 'Expense',
-      category: 'Utilities',
-      amount: 3200,
-      description: 'Electricity & Broadband Bill',
-    },
-    {
-      id: 'tx-3',
-      date: `05-${month}-${year}`,
-      type: 'Expense',
-      category: 'Food/Beverages',
-      amount: 4800,
-      description: 'Monthly Grocery & Provisions',
-    },
-    {
-      id: 'tx-4',
-      date: `08-${month}-${year}`,
-      type: 'Expense',
-      category: 'Gym/Health',
-      amount: 2500,
-      description: 'Fitness & Health Club',
-    },
-    {
-      id: 'tx-5',
-      date: `11-${month}-${year}`,
-      type: 'Income',
-      category: 'Others',
-      amount: 12500,
-      description: 'Consulting Advisory Payment',
-    },
-    {
-      id: 'tx-6',
-      date: `14-${month}-${year}`,
-      type: 'Expense',
-      category: 'Shopping',
-      amount: 3800,
-      description: 'Apparel & Work Accessories',
-    },
-    {
-      id: 'tx-7',
-      date: `16-${month}-${year}`,
-      type: 'Expense',
-      category: 'Travel',
-      amount: 2200,
-      description: 'Cab & Transit Pass',
-    },
-    {
-      id: 'tx-8',
-      date: `18-${month}-${year}`,
-      type: 'Expense',
-      category: 'Entertainment',
-      amount: 1400,
-      description: 'Weekend Dining & Streaming',
-    },
-    {
-      id: 'tx-9',
-      date: `20-${month}-${year}`,
-      type: 'Expense',
-      category: 'Investment',
-      amount: 15000,
-      description: 'Mutual Fund SIP & Deposits',
-    },
-  ];
+  return [];
 }
 
 // Read authorization token if available in the environment
@@ -142,7 +65,7 @@ export function loadStoredConfig(): SheetConnectionConfig {
   if (typeof window === 'undefined') {
     return {
       spreadsheetId: DEFAULT_SPREADSHEET_ID,
-      status: 'connected',
+      status: 'idle',
     };
   }
   const saved = localStorage.getItem(LOCAL_STORAGE_CONFIG_KEY);
@@ -155,8 +78,8 @@ export function loadStoredConfig(): SheetConnectionConfig {
   }
   return {
     spreadsheetId: DEFAULT_SPREADSHEET_ID,
-    status: 'connected',
-    lastSyncedAt: new Date().toISOString(),
+    status: 'idle',
+    lastSyncedAt: null,
   };
 }
 
@@ -167,7 +90,7 @@ export function saveStoredConfig(config: SheetConnectionConfig): void {
 }
 
 export function loadStoredTransactions(): Transaction[] {
-  if (typeof window === 'undefined') return getInitialTransactions();
+  if (typeof window === 'undefined') return [];
   const saved = localStorage.getItem(LOCAL_STORAGE_TRANSACTIONS_KEY);
   if (saved !== null) {
     try {
@@ -177,9 +100,15 @@ export function loadStoredTransactions(): Transaction[] {
       // fallback
     }
   }
-  const initial = getInitialTransactions();
-  localStorage.setItem(LOCAL_STORAGE_TRANSACTIONS_KEY, JSON.stringify(initial));
-  return initial;
+  return [];
+}
+
+export function clearStoredData(): void {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(LOCAL_STORAGE_TRANSACTIONS_KEY);
+    localStorage.removeItem(LOCAL_STORAGE_CATEGORIES_KEY);
+    localStorage.removeItem(LOCAL_STORAGE_CONFIG_KEY);
+  }
 }
 
 export function saveStoredTransactions(transactions: Transaction[]): void {

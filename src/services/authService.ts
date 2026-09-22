@@ -14,16 +14,15 @@ import { DEFAULT_INCOME_CATEGORIES, DEFAULT_EXPENSE_CATEGORIES } from './googleS
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 
-export const ALLOWED_USER_EMAIL = 'joelstan2001@gmail.com';
+// Optional restricted email from environment variable (never hardcoded in source)
+const envAllowedEmail = (import.meta.env.VITE_ALLOWED_EMAIL || '').trim().toLowerCase();
 
 export const isAuthorizedUser = (user: User | null): boolean => {
   if (!user || !user.email) return false;
-  return user.email.toLowerCase().trim() === ALLOWED_USER_EMAIL.toLowerCase().trim();
-};
-
-export const hasPriorLogin = (): boolean => {
-  if (typeof window === 'undefined') return false;
-  return localStorage.getItem('has_logged_in_before') === 'true';
+  if (envAllowedEmail) {
+    return user.email.toLowerCase().trim() === envAllowedEmail;
+  }
+  return true;
 };
 
 export const SCOPES = [
@@ -33,9 +32,9 @@ export const SCOPES = [
 const provider = new GoogleAuthProvider();
 SCOPES.forEach((scope) => provider.addScope(scope));
 
-// Pre-fill user email and include previously granted scopes without forcing consent
+// Ensure account selector is shown and DO NOT pre-fill any private email address
 provider.setCustomParameters({
-  login_hint: ALLOWED_USER_EMAIL,
+  prompt: 'select_account',
   include_granted_scopes: 'true',
 });
 
@@ -89,7 +88,7 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
       throw new Error('Failed to retrieve access token from Google sign in');
     }
 
-    // Strictly enforce single-user access
+    // Strictly enforce authorized access if restriction configured
     if (!isAuthorizedUser(result.user)) {
       await signOut(auth);
       cachedAccessToken = null;
@@ -97,15 +96,13 @@ export const googleSignIn = async (): Promise<{ user: User; accessToken: string 
         sessionStorage.removeItem(SESSION_TOKEN_KEY);
       }
       throw new Error(
-        `Access Denied: This tracker is private and only accessible to ${ALLOWED_USER_EMAIL}. You signed in with ${result.user.email || 'another account'}.`
+        'Access Denied: This tracker is restricted to authorized accounts.'
       );
     }
 
     cachedAccessToken = credential.accessToken;
     if (typeof window !== 'undefined') {
       sessionStorage.setItem(SESSION_TOKEN_KEY, credential.accessToken);
-      localStorage.setItem('has_logged_in_before', 'true');
-      localStorage.setItem('last_authorized_email', result.user.email || ALLOWED_USER_EMAIL);
     }
     return { user: result.user, accessToken: cachedAccessToken };
   } catch (error) {
@@ -136,10 +133,19 @@ export const setCachedAccessToken = (token: string | null) => {
 };
 
 export const googleSignOut = async () => {
-  await signOut(auth);
+  try {
+    await signOut(auth);
+  } catch (err) {
+    console.warn('Sign out notice:', err);
+  }
   cachedAccessToken = null;
   if (typeof window !== 'undefined') {
-    sessionStorage.removeItem(SESSION_TOKEN_KEY);
+    sessionStorage.clear();
+    localStorage.removeItem('income_expense_tracker_transactions');
+    localStorage.removeItem('income_expense_tracker_categories');
+    localStorage.removeItem('income_expense_tracker_config');
+    localStorage.removeItem('has_logged_in_before');
+    localStorage.removeItem('last_authorized_email');
   }
 };
 

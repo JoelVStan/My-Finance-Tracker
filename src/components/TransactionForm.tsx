@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { TransactionType, CategoriesData } from '../types';
 import { PlusCircle, MinusCircle, Calendar, Tag, FileText, CheckCircle2 } from 'lucide-react';
+import { fromInputDateFormat } from '../utils/dateUtils';
 
 interface TransactionFormProps {
   categories: CategoriesData;
@@ -75,8 +76,9 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
 
     try {
       setIsSubmitting(true);
+      const formattedDate = fromInputDateFormat(date);
       await onSubmit({
-        date,
+        date: formattedDate,
         type,
         category,
         amount: parsedAmount,
@@ -188,9 +190,12 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
 
           {/* Date Field */}
           <div>
-            <label className="block text-xs font-medium text-neutral-300 mb-1 flex items-center gap-1.5">
-              <Calendar className="w-3.5 h-3.5 text-neutral-400" />
-              Date *
+            <label className="block text-xs font-medium text-neutral-300 mb-1 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
+                <Calendar className="w-3.5 h-3.5 text-neutral-400" />
+                Date *
+              </span>
+              <span className="text-[10px] text-emerald-400 font-mono">DD-MM-YYYY</span>
             </label>
             <input
               id="input-transaction-date"

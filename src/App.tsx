@@ -510,7 +510,7 @@ export default function App() {
               <ExpensePieChart
                 transactions={transactions}
                 expenseCategories={categories.expenseCategories}
-                title="Current Month's Expense Breakdown"
+                title="Expense Breakdown"
                 height={240}
               />
               <TrendLineChart transactions={transactions} height={260} />

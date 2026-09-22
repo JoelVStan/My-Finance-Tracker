@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { Transaction } from '../types';
-import { PieChart as PieIcon } from 'lucide-react';
+import { PieChart as PieIcon, Calendar } from 'lucide-react';
+import { getYearMonthKey, formatMonthLabel } from '../utils/dateUtils';
 
 interface ExpensePieChartProps {
   transactions: Transaction[];
@@ -67,29 +68,60 @@ const CustomTooltip: React.FC<CustomTooltipProps> = ({ active, payload }) => {
 export const ExpensePieChart: React.FC<ExpensePieChartProps> = ({
   transactions,
   expenseCategories,
-  title = "Current Month's Expense Breakdown",
+  title = "Expense Breakdown",
   height = 260,
 }) => {
-  // Current month filter: e.g. YYYY-MM
-  const currentYearMonth = useMemo(() => {
+  // Extract all distinct months available in transactions (newest first)
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+    transactions.forEach((tx) => {
+      if (tx.type === 'Expense') {
+        const ym = getYearMonthKey(tx.date);
+        if (ym) set.add(ym);
+      }
+    });
+    return Array.from(set).sort().reverse();
+  }, [transactions]);
+
+  // Current calendar month key (YYYY-MM)
+  const currentCalendarMonth = useMemo(() => {
     const now = new Date();
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, '0');
     return `${y}-${m}`;
   }, []);
 
-  const monthLabel = useMemo(() => {
-    const now = new Date();
-    return now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-  }, []);
+  // Selected month state
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
 
-  // Filter expenses strictly for current month and mapped to Expense list
+  // Determine active month to display:
+  // If user selected one, use it. Otherwise, if current month has data, use current month, else newest available month
+  const activeMonth = useMemo(() => {
+    if (selectedMonth && (selectedMonth === 'ALL' || availableMonths.includes(selectedMonth))) {
+      return selectedMonth;
+    }
+    if (availableMonths.includes(currentCalendarMonth)) {
+      return currentCalendarMonth;
+    }
+    if (availableMonths.length > 0) {
+      return availableMonths[0]; // e.g. "2026-01" for January
+    }
+    return currentCalendarMonth;
+  }, [selectedMonth, availableMonths, currentCalendarMonth]);
+
+  const monthLabel = useMemo(() => {
+    if (activeMonth === 'ALL') return 'All Recorded Months';
+    return formatMonthLabel(activeMonth);
+  }, [activeMonth]);
+
+  // Filter expenses strictly for active month and mapped to Expense list
   const { chartData, totalExpense } = useMemo(() => {
-    // Current month expenses matching expense list
     const monthExpenses = transactions.filter((tx) => {
       if (tx.type !== 'Expense') return false;
-      const isCurrentMonth = tx.date.startsWith(currentYearMonth);
-      if (!isCurrentMonth) return false;
+      if (activeMonth !== 'ALL') {
+        const ym = getYearMonthKey(tx.date);
+        if (ym !== activeMonth) return false;
+      }
       // Match against expense categories list (case-insensitive for robustness)
       const mapped = expenseCategories.some(
         (cat) => cat.trim().toLowerCase() === tx.category.trim().toLowerCase()
@@ -118,14 +150,14 @@ export const ExpensePieChart: React.FC<ExpensePieChartProps> = ({
       .sort((a, b) => b.amount - a.amount);
 
     return { chartData: data, totalExpense: sum };
-  }, [transactions, expenseCategories, currentYearMonth]);
+  }, [transactions, expenseCategories, activeMonth]);
 
   return (
     <div
       id="expense-pie-chart-card"
       className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-5 flex flex-col justify-between"
     >
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2">
         <div>
           <h3 className="text-sm font-semibold text-neutral-100 flex items-center gap-2">
             <PieIcon className="w-4 h-4 text-rose-400" />
@@ -135,10 +167,32 @@ export const ExpensePieChart: React.FC<ExpensePieChartProps> = ({
             {monthLabel} • {chartData.length} active categories
           </p>
         </div>
-        <div className="text-right">
-          <span className="text-xs text-neutral-400">Total Spent</span>
-          <div className="text-base font-bold text-rose-400">
-            ₹{totalExpense.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+
+        <div className="flex items-center gap-3">
+          {/* Month selector dropdown if multiple months exist */}
+          {availableMonths.length > 0 && (
+            <div className="relative">
+              <select
+                id="expense-month-selector"
+                value={activeMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="text-xs bg-neutral-950 border border-neutral-800 text-neutral-200 rounded-lg px-2.5 py-1 focus:outline-none focus:border-neutral-600 cursor-pointer"
+              >
+                {availableMonths.map((ym) => (
+                  <option key={ym} value={ym}>
+                    {formatMonthLabel(ym)}
+                  </option>
+                ))}
+                <option value="ALL">All Months</option>
+              </select>
+            </div>
+          )}
+
+          <div className="text-right">
+            <span className="text-[11px] text-neutral-400 block">Total Spent</span>
+            <div className="text-sm sm:text-base font-bold text-rose-400">
+              ₹{totalExpense.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </div>
           </div>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { Transaction, TransactionType } from '../types';
 import { ArrowUpRight, ArrowDownRight, Search, Filter, Trash2, Calendar, FileText } from 'lucide-react';
+import { getDateTimestamp, formatToDDMMYYYY } from '../utils/dateUtils';
 
 interface RecentTransactionsProps {
   transactions: Transaction[];
@@ -33,7 +34,7 @@ export const RecentTransactions: React.FC<RecentTransactionsProps> = ({
         }
         return true;
       })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      .sort((a, b) => getDateTimestamp(b.date) - getDateTimestamp(a.date));
   }, [transactions, typeFilter, searchQuery]);
 
   const displayedList = limit ? filteredList.slice(0, limit) : filteredList;
@@ -157,9 +158,9 @@ export const RecentTransactions: React.FC<RecentTransactionsProps> = ({
                     key={tx.id}
                     className="hover:bg-neutral-800/40 transition-colors group"
                   >
-                    {/* Date */}
-                    <td className="py-2.5 px-3 font-mono text-neutral-400 whitespace-nowrap">
-                      {tx.date}
+                    {/* Date (DD-MM-YYYY) */}
+                    <td className="py-2.5 px-3 font-mono text-neutral-300 whitespace-nowrap">
+                      {formatToDDMMYYYY(tx.date)}
                     </td>
 
                     {/* Type Badge */}

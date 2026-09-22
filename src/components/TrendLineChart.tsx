@@ -11,6 +11,7 @@ import {
 } from 'recharts';
 import { Transaction, TrendPeriod } from '../types';
 import { TrendingUp, Calendar, Clock } from 'lucide-react';
+import { parseDateParts } from '../utils/dateUtils';
 
 interface TrendLineChartProps {
   transactions: Transaction[];
@@ -35,53 +36,75 @@ export const TrendLineChart: React.FC<TrendLineChartProps> = ({
     if (transactions.length === 0) return [];
 
     if (period === 'daily') {
-      // Group by Date (YYYY-MM-DD)
-      const map: Record<string, { income: number; expense: number }> = {};
+      // Group by canonical date: YYYY-MM-DD for accurate chronological order
+      const map: Record<
+        string,
+        { income: number; expense: number; day: number; month: number; year: number }
+      > = {};
 
       transactions.forEach((tx) => {
-        const d = tx.date;
-        if (!map[d]) {
-          map[d] = { income: 0, expense: 0 };
+        const parts = parseDateParts(tx.date);
+        if (!parts) return;
+        const sortKey = `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(
+          parts.day
+        ).padStart(2, '0')}`;
+        if (!map[sortKey]) {
+          map[sortKey] = {
+            income: 0,
+            expense: 0,
+            day: parts.day,
+            month: parts.month,
+            year: parts.year,
+          };
         }
         if (tx.type === 'Income') {
-          map[d].income += tx.amount;
+          map[sortKey].income += tx.amount;
         } else {
-          map[d].expense += tx.amount;
+          map[sortKey].expense += tx.amount;
         }
       });
 
-      // Sort dates ascending
       const sortedDates = Object.keys(map).sort();
-      // Take up to recent 14-30 dates for clean readability
-      const recentDates = sortedDates.slice(-20);
+      const recentDates = sortedDates.slice(-30);
 
-      return recentDates.map((dateStr) => {
-        const [y, m, d] = dateStr.split('-');
-        const dateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
-        const formatted = dateObj.toLocaleDateString('en-US', {
-          month: 'short',
+      return recentDates.map((dateKey) => {
+        const item = map[dateKey];
+        const dateObj = new Date(item.year, item.month - 1, item.day);
+        const label = dateObj.toLocaleDateString('en-US', {
           day: 'numeric',
+          month: 'short',
         });
-
-        const inc = map[dateStr].income;
-        const exp = map[dateStr].expense;
+        const fullDDMMYYYY = `${String(item.day).padStart(2, '0')}-${String(item.month).padStart(
+          2,
+          '0'
+        )}-${item.year}`;
 
         return {
-          label: formatted,
-          rawDate: dateStr,
-          income: inc,
-          expense: exp,
-          net: inc - exp,
+          label,
+          rawDate: fullDDMMYYYY,
+          income: item.income,
+          expense: item.expense,
+          net: item.income - item.expense,
         };
       });
     } else {
-      // Group by Month (YYYY-MM)
-      const map: Record<string, { income: number; expense: number }> = {};
+      // Group by Month: YYYY-MM (e.g. 2026-01 for all January transactions)
+      const map: Record<
+        string,
+        { income: number; expense: number; month: number; year: number }
+      > = {};
 
       transactions.forEach((tx) => {
-        const monthKey = tx.date.substring(0, 7); // YYYY-MM
+        const parts = parseDateParts(tx.date);
+        if (!parts) return;
+        const monthKey = `${parts.year}-${String(parts.month).padStart(2, '0')}`;
         if (!map[monthKey]) {
-          map[monthKey] = { income: 0, expense: 0 };
+          map[monthKey] = {
+            income: 0,
+            expense: 0,
+            month: parts.month,
+            year: parts.year,
+          };
         }
         if (tx.type === 'Income') {
           map[monthKey].income += tx.amount;
@@ -93,22 +116,19 @@ export const TrendLineChart: React.FC<TrendLineChartProps> = ({
       const sortedMonths = Object.keys(map).sort();
 
       return sortedMonths.map((mKey) => {
-        const [year, month] = mKey.split('-');
-        const d = new Date(parseInt(year), parseInt(month) - 1, 1);
+        const item = map[mKey];
+        const d = new Date(item.year, item.month - 1, 1);
         const label = d.toLocaleDateString('en-US', {
           month: 'short',
-          year: '2-digit',
+          year: 'numeric',
         });
-
-        const inc = map[mKey].income;
-        const exp = map[mKey].expense;
 
         return {
           label,
           rawDate: mKey,
-          income: inc,
-          expense: exp,
-          net: inc - exp,
+          income: item.income,
+          expense: item.expense,
+          net: item.income - item.expense,
         };
       });
     }

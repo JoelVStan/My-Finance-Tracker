@@ -1,5 +1,6 @@
 import { Transaction, CategoriesData, SheetConnectionConfig } from '../types';
 import { getCachedAccessToken } from './authService';
+import { formatToDDMMYYYY } from '../utils/dateUtils';
 
 export const DEFAULT_INCOME_CATEGORIES: string[] = ['Salary', 'Others', 'Gift'];
 
@@ -39,7 +40,7 @@ export function getInitialTransactions(): Transaction[] {
   return [
     {
       id: 'tx-1',
-      date: `${year}-${month}-01`,
+      date: `01-${month}-${year}`,
       type: 'Income',
       category: 'Salary',
       amount: 75000,
@@ -47,7 +48,7 @@ export function getInitialTransactions(): Transaction[] {
     },
     {
       id: 'tx-2',
-      date: `${year}-${month}-03`,
+      date: `03-${month}-${year}`,
       type: 'Expense',
       category: 'Utilities',
       amount: 3200,
@@ -55,7 +56,7 @@ export function getInitialTransactions(): Transaction[] {
     },
     {
       id: 'tx-3',
-      date: `${year}-${month}-05`,
+      date: `05-${month}-${year}`,
       type: 'Expense',
       category: 'Food/Beverages',
       amount: 4800,
@@ -63,7 +64,7 @@ export function getInitialTransactions(): Transaction[] {
     },
     {
       id: 'tx-4',
-      date: `${year}-${month}-08`,
+      date: `08-${month}-${year}`,
       type: 'Expense',
       category: 'Gym/Health',
       amount: 2500,
@@ -71,7 +72,7 @@ export function getInitialTransactions(): Transaction[] {
     },
     {
       id: 'tx-5',
-      date: `${year}-${month}-11`,
+      date: `11-${month}-${year}`,
       type: 'Income',
       category: 'Others',
       amount: 12500,
@@ -79,7 +80,7 @@ export function getInitialTransactions(): Transaction[] {
     },
     {
       id: 'tx-6',
-      date: `${year}-${month}-14`,
+      date: `14-${month}-${year}`,
       type: 'Expense',
       category: 'Shopping',
       amount: 3800,
@@ -87,7 +88,7 @@ export function getInitialTransactions(): Transaction[] {
     },
     {
       id: 'tx-7',
-      date: `${year}-${month}-16`,
+      date: `16-${month}-${year}`,
       type: 'Expense',
       category: 'Travel',
       amount: 2200,
@@ -95,7 +96,7 @@ export function getInitialTransactions(): Transaction[] {
     },
     {
       id: 'tx-8',
-      date: `${year}-${month}-18`,
+      date: `18-${month}-${year}`,
       type: 'Expense',
       category: 'Entertainment',
       amount: 1400,
@@ -103,7 +104,7 @@ export function getInitialTransactions(): Transaction[] {
     },
     {
       id: 'tx-9',
-      date: `${year}-${month}-20`,
+      date: `20-${month}-${year}`,
       type: 'Expense',
       category: 'Investment',
       amount: 15000,
@@ -343,7 +344,8 @@ export class GoogleSheetsService {
         const row = rows[i];
         if (!row || row.length === 0 || !row[0]) continue;
 
-        const date = row[0]?.trim() || new Date().toISOString().split('T')[0];
+        const rawDate = row[0]?.trim();
+        const date = formatToDDMMYYYY(rawDate);
         const rawType = row[1]?.trim() || 'Expense';
         const type = rawType.toLowerCase() === 'income' ? 'Income' : 'Expense';
         const category = row[2]?.trim() || (type === 'Income' ? 'Salary' : 'Others');
@@ -382,13 +384,14 @@ export class GoogleSheetsService {
         this.spreadsheetId
       )}/values/Transactions!A:E:append?valueInputOption=USER_ENTERED`;
 
+      const formattedDate = formatToDDMMYYYY(tx.date);
       const response = await fetch(url, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify({
           range: 'Transactions!A:E',
           majorDimension: 'ROWS',
-          values: [[tx.date, tx.type, tx.category, tx.amount.toString(), tx.description || '']],
+          values: [[formattedDate, tx.type, tx.category, tx.amount.toString(), tx.description || '']],
         }),
       });
 
@@ -434,7 +437,7 @@ export class GoogleSheetsService {
       const rows: string[][] = [
         ['Date', 'Type', 'Category', 'Amount', 'Description'],
         ...remainingTransactions.map((tx) => [
-          tx.date,
+          formatToDDMMYYYY(tx.date),
           tx.type,
           tx.category,
           tx.amount.toString(),

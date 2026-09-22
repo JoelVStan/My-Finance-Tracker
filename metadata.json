@@ -1,0 +1,6 @@
+{
+  "name": "Income & Expense Tracker",
+  "description": "A personal income and expenditure tracking web app using Google Sheets REST API with dynamic categories, financial summary cards, visual analytics, and responsive mobile/desktop layouts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

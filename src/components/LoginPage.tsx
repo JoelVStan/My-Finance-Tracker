@@ -120,27 +120,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onAuthSuccess }) => {
             </p>
           </div>
 
-          {/* Privacy Guarantees */}
-          <div className="pt-4 border-t border-neutral-800/80 space-y-3">
-            <div className="flex items-start gap-2.5 text-xs text-neutral-400">
-              <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-              <span>
-                <strong className="text-neutral-300">100% Private to Your Drive:</strong> All transactions sync straight to your personal Google Sheet. No external databases.
-              </span>
-            </div>
-            <div className="flex items-start gap-2.5 text-xs text-neutral-400">
-              <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-              <span>
-                <strong className="text-neutral-300">Zero Public Visibility:</strong> When logged out, no financial information, history, or balances are accessible.
-              </span>
-            </div>
-            <div className="flex items-start gap-2.5 text-xs text-neutral-400">
-              <CheckCircle className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" />
-              <span>
-                <strong className="text-neutral-300">Automatic Session Wipe:</strong> Logging out clears all temporary cached records from the device immediately.
-              </span>
-            </div>
-          </div>
+          
         </div>
       </main>
 

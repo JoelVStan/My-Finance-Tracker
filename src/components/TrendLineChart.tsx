@@ -39,7 +39,7 @@ export const TrendLineChart: React.FC<TrendLineChartProps> = ({
       // Group by canonical date: YYYY-MM-DD for accurate chronological order
       const map: Record<
         string,
-        { income: number; expense: number; day: number; month: number; year: number }
+        { income: number; expense: number; investment: number; day: number; month: number; year: number }
       > = {};
 
       transactions.forEach((tx) => {
@@ -52,6 +52,7 @@ export const TrendLineChart: React.FC<TrendLineChartProps> = ({
           map[sortKey] = {
             income: 0,
             expense: 0,
+            investment: 0,
             day: parts.day,
             month: parts.month,
             year: parts.year,
@@ -59,6 +60,8 @@ export const TrendLineChart: React.FC<TrendLineChartProps> = ({
         }
         if (tx.type === 'Income') {
           map[sortKey].income += tx.amount;
+        } else if (tx.type === 'Investment') {
+          map[sortKey].investment += tx.amount;
         } else {
           map[sortKey].expense += tx.amount;
         }
@@ -84,14 +87,15 @@ export const TrendLineChart: React.FC<TrendLineChartProps> = ({
           rawDate: fullDDMMYYYY,
           income: item.income,
           expense: item.expense,
-          net: item.income - item.expense,
+          investment: item.investment,
+          net: item.income - item.expense - item.investment,
         };
       });
     } else {
       // Group by Month: YYYY-MM (e.g. 2026-01 for all January transactions)
       const map: Record<
         string,
-        { income: number; expense: number; month: number; year: number }
+        { income: number; expense: number; investment: number; month: number; year: number }
       > = {};
 
       transactions.forEach((tx) => {
@@ -102,12 +106,15 @@ export const TrendLineChart: React.FC<TrendLineChartProps> = ({
           map[monthKey] = {
             income: 0,
             expense: 0,
+            investment: 0,
             month: parts.month,
             year: parts.year,
           };
         }
         if (tx.type === 'Income') {
           map[monthKey].income += tx.amount;
+        } else if (tx.type === 'Investment') {
+          map[monthKey].investment += tx.amount;
         } else {
           map[monthKey].expense += tx.amount;
         }
@@ -128,7 +135,8 @@ export const TrendLineChart: React.FC<TrendLineChartProps> = ({
           rawDate: mKey,
           income: item.income,
           expense: item.expense,
-          net: item.income - item.expense,
+          investment: item.investment,
+          net: item.income - item.expense - item.investment,
         };
       });
     }
@@ -139,16 +147,16 @@ export const TrendLineChart: React.FC<TrendLineChartProps> = ({
   return (
     <div
       id="trend-line-chart-card"
-      className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-5 flex flex-col justify-between"
+      className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5 flex flex-col justify-between overflow-hidden"
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
         <div>
           <h3 className="text-sm font-semibold text-neutral-100 flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-emerald-400" />
-            Income vs. Expenses Trend
+            Cashflow &amp; Investment Trends
           </h3>
           <p className="text-xs text-neutral-400 mt-0.5">
-            Temporal cashflow comparison over {period === 'daily' ? 'recent days' : 'months'}
+            Temporal comparison over {period === 'daily' ? 'recent days' : 'months'}
           </p>
         </div>
 
@@ -216,7 +224,8 @@ export const TrendLineChart: React.FC<TrendLineChartProps> = ({
                   if (active && payload && payload.length) {
                     const inc = Number(payload.find((p) => p.dataKey === 'income')?.value || 0);
                     const exp = Number(payload.find((p) => p.dataKey === 'expense')?.value || 0);
-                    const net = inc - exp;
+                    const inv = Number(payload.find((p) => p.dataKey === 'investment')?.value || 0);
+                    const net = inc - exp - inv;
 
                     return (
                       <div className="rounded-lg border border-neutral-700 bg-neutral-900/95 p-3 shadow-xl text-xs backdrop-blur-sm">
@@ -231,8 +240,12 @@ export const TrendLineChart: React.FC<TrendLineChartProps> = ({
                           <span>Expense:</span>
                           <span className="font-bold">₹{exp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </div>
+                        <div className="flex items-center justify-between gap-4 text-violet-400 mt-0.5">
+                          <span>Investment:</span>
+                          <span className="font-bold">₹{inv.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
                         <div className="flex items-center justify-between gap-4 text-neutral-300 mt-1 pt-1 border-t border-neutral-800">
-                          <span>Net Cashflow:</span>
+                          <span>Net Balance:</span>
                           <span
                             className={`font-bold ${
                               net >= 0 ? 'text-emerald-400' : 'text-rose-400'
@@ -269,6 +282,15 @@ export const TrendLineChart: React.FC<TrendLineChartProps> = ({
                 stroke="#f43f5e"
                 strokeWidth={2.5}
                 dot={{ r: 3, fill: '#f43f5e', strokeWidth: 1, stroke: '#881337' }}
+                activeDot={{ r: 5 }}
+              />
+              <Line
+                type="monotone"
+                name="Investment"
+                dataKey="investment"
+                stroke="#a78bfa"
+                strokeWidth={2.5}
+                dot={{ r: 3, fill: '#a78bfa', strokeWidth: 1, stroke: '#4c1d95' }}
                 activeDot={{ r: 5 }}
               />
             </LineChart>

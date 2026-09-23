@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import {
   googleSignIn,
   googleSignOut,
   createNewFinancesSpreadsheet,
 } from '../services/authService';
+import {
+  getPersistentSpreadsheetId,
+  setPersistentSpreadsheetId,
+} from '../services/googleSheetsService';
 import {
   ExternalLink,
   Plus,
@@ -41,11 +45,22 @@ export const GoogleAuthButton: React.FC<GoogleAuthButtonProps> = ({
   const [inputUrlOrId, setInputUrlOrId] = useState('');
   const [showLinkInput, setShowLinkInput] = useState(false);
 
+  const effectiveSpreadsheetId =
+    currentSpreadsheetId ||
+    (user ? getPersistentSpreadsheetId(user.email, user.uid) : getPersistentSpreadsheetId());
+
   const isSheetLinked = Boolean(
-    currentSpreadsheetId &&
-    currentSpreadsheetId.trim() !== '' &&
-    currentSpreadsheetId !== 'personal-finances-tracker-sheet'
+    effectiveSpreadsheetId &&
+    effectiveSpreadsheetId.trim() !== '' &&
+    effectiveSpreadsheetId !== 'personal-finances-tracker-sheet'
   );
+
+  // If component detects a remembered sheet ID that is not yet in App's state, hydrate it
+  useEffect(() => {
+    if (!currentSpreadsheetId && effectiveSpreadsheetId) {
+      onSelectSpreadsheet(effectiveSpreadsheetId);
+    }
+  }, [currentSpreadsheetId, effectiveSpreadsheetId, onSelectSpreadsheet]);
 
   const handleSignIn = async () => {
     try {
@@ -79,6 +94,7 @@ export const GoogleAuthButton: React.FC<GoogleAuthButtonProps> = ({
       setCreatingSheet(true);
       setErrorMsg(null);
       const res = await createNewFinancesSpreadsheet(accessToken, 'Personal Finances Tracker');
+      setPersistentSpreadsheetId(res.spreadsheetId, user?.email, user?.uid);
       onSelectSpreadsheet(res.spreadsheetId);
     } catch (err: any) {
       setErrorMsg(err?.message || 'Failed to create spreadsheet');
@@ -96,6 +112,7 @@ export const GoogleAuthButton: React.FC<GoogleAuthButtonProps> = ({
     const match = raw.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
     const extractedId = match ? match[1] : raw;
 
+    setPersistentSpreadsheetId(extractedId, user?.email, user?.uid);
     onSelectSpreadsheet(extractedId);
     setInputUrlOrId('');
     setShowLinkInput(false);

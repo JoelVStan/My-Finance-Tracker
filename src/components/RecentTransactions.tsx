@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Transaction, TransactionType } from '../types';
-import { ArrowUpRight, ArrowDownRight, Search, Filter, Trash2, Calendar, FileText } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, TrendingUp, Search, Filter, Trash2, Calendar, FileText } from 'lucide-react';
 import { getDateTimestamp, formatToDDMMYYYY } from '../utils/dateUtils';
 
 interface RecentTransactionsProps {
@@ -79,12 +79,12 @@ export const RecentTransactions: React.FC<RecentTransactionsProps> = ({
 
             {/* Type Filter Buttons */}
             <div className="inline-flex rounded-lg bg-neutral-950 p-0.5 border border-neutral-800">
-              {(['All', 'Income', 'Expense'] as const).map((t) => (
+              {(['All', 'Income', 'Expense', 'Investment'] as const).map((t) => (
                 <button
                   key={t}
                   type="button"
                   onClick={() => setTypeFilter(t)}
-                  className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
+                  className={`px-2 py-1 text-xs font-medium rounded-md transition-all ${
                     typeFilter === t
                       ? 'bg-neutral-800 text-neutral-100 shadow-sm'
                       : 'text-neutral-400 hover:text-neutral-200'
@@ -153,6 +153,7 @@ export const RecentTransactions: React.FC<RecentTransactionsProps> = ({
             ) : (
               displayedList.map((tx) => {
                 const isIncome = tx.type === 'Income';
+                const isInvestment = tx.type === 'Investment';
                 return (
                   <tr
                     key={tx.id}
@@ -169,11 +170,15 @@ export const RecentTransactions: React.FC<RecentTransactionsProps> = ({
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium ${
                           isIncome
                             ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/40'
+                            : isInvestment
+                            ? 'bg-violet-950/60 text-violet-400 border border-violet-800/40'
                             : 'bg-rose-950/60 text-rose-400 border border-rose-800/40'
                         }`}
                       >
                         {isIncome ? (
                           <ArrowUpRight className="w-3 h-3" />
+                        ) : isInvestment ? (
+                          <TrendingUp className="w-3 h-3" />
                         ) : (
                           <ArrowDownRight className="w-3 h-3" />
                         )}
@@ -194,10 +199,14 @@ export const RecentTransactions: React.FC<RecentTransactionsProps> = ({
                     {/* Amount */}
                     <td
                       className={`py-2.5 px-3 text-right font-mono font-semibold whitespace-nowrap ${
-                        isIncome ? 'text-emerald-400' : 'text-rose-400'
+                        isIncome
+                          ? 'text-emerald-400'
+                          : isInvestment
+                          ? 'text-violet-400'
+                          : 'text-rose-400'
                       }`}
                     >
-                      {isIncome ? '+' : '-'}₹{tx.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      {isIncome ? '+' : isInvestment ? '↗' : '-'}₹{tx.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
 
                     {/* Action */}

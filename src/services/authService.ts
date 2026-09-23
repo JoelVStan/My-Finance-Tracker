@@ -8,7 +8,11 @@ import {
   User,
 } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { DEFAULT_INCOME_CATEGORIES, DEFAULT_EXPENSE_CATEGORIES } from './googleSheetsService';
+import {
+  DEFAULT_INCOME_CATEGORIES,
+  DEFAULT_EXPENSE_CATEGORIES,
+  DEFAULT_INVESTMENT_CATEGORIES,
+} from './googleSheetsService';
 
 // Initialize Firebase App and Auth
 const app = initializeApp(firebaseConfig);
@@ -27,6 +31,7 @@ export const isAuthorizedUser = (user: User | null): boolean => {
 
 export const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
+  'https://www.googleapis.com/auth/drive.file',
 ];
 
 const provider = new GoogleAuthProvider();
@@ -141,13 +146,43 @@ export const googleSignOut = async () => {
   cachedAccessToken = null;
   if (typeof window !== 'undefined') {
     sessionStorage.clear();
+    // Wipe sensitive transient state only; do NOT wipe the linked spreadsheet ID
     localStorage.removeItem('income_expense_tracker_transactions');
     localStorage.removeItem('income_expense_tracker_categories');
-    localStorage.removeItem('income_expense_tracker_config');
     localStorage.removeItem('has_logged_in_before');
     localStorage.removeItem('last_authorized_email');
   }
 };
+
+/**
+ * Searches the user's Google Drive for an existing Personal Finances Tracker spreadsheet
+ */
+export async function findExistingFinancesSpreadsheet(
+  accessToken: string,
+  title = 'Personal Finances Tracker'
+): Promise<string | null> {
+  if (!accessToken) return null;
+  try {
+    const q = encodeURIComponent(
+      `name = '${title}' and mimeType = 'application/vnd.google-apps.spreadsheet' and trashed = false`
+    );
+    const url = `https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=modifiedTime desc&pageSize=1&fields=files(id,name)`;
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.files && data.files.length > 0 && data.files[0].id) {
+        return data.files[0].id;
+      }
+    }
+  } catch (err) {
+    console.warn('Drive auto-discovery notice:', err);
+  }
+  return null;
+}
 
 /**
  * Creates a brand new Google Spreadsheet in the user's Google Drive
@@ -163,16 +198,18 @@ export async function createNewFinancesSpreadsheet(
 
   const incomeCats = DEFAULT_INCOME_CATEGORIES;
   const expenseCats = DEFAULT_EXPENSE_CATEGORIES;
-  const maxRows = Math.max(incomeCats.length, expenseCats.length);
+  const investmentCats = DEFAULT_INVESTMENT_CATEGORIES;
+  const maxRows = Math.max(incomeCats.length, expenseCats.length, investmentCats.length);
 
   const categoryRows: string[][] = [
-    ['Income Categories', 'Expense Categories'],
+    ['Income Categories', 'Expense Categories', 'Investment Categories'],
   ];
 
   for (let i = 0; i < maxRows; i++) {
     const inc = incomeCats[i] || '';
     const exp = expenseCats[i] || '';
-    categoryRows.push([inc, exp]);
+    const inv = investmentCats[i] || '';
+    categoryRows.push([inc, exp, inv]);
   }
 
   const payload = {

@@ -14,6 +14,8 @@ import {
   saveStoredCategories,
   loadStoredConfig,
   saveStoredConfig,
+  getPersistentSpreadsheetId,
+  setPersistentSpreadsheetId,
 } from './services/googleSheetsService';
 import { SummaryCards } from './components/SummaryCards';
 import { ExpensePieChart } from './components/ExpensePieChart';
@@ -26,10 +28,16 @@ import { CategoryManagerModal } from './components/CategoryManagerModal';
 import { GoogleAuthButton } from './components/GoogleAuthButton';
 import { LoginPage } from './components/LoginPage';
 import { User } from 'firebase/auth';
-import { initAuth, getCachedAccessToken, googleSignOut } from './services/authService';
+import {
+  initAuth,
+  getCachedAccessToken,
+  googleSignOut,
+  findExistingFinancesSpreadsheet,
+} from './services/authService';
 import {
   Plus,
   Minus,
+  TrendingUp,
   Wallet,
   Sparkles,
   ArrowRight,
@@ -95,11 +103,38 @@ export default function App() {
         setUser(authUser);
         setAccessToken(token);
         setAuthLoading(false);
+
+        const savedSheetId = getPersistentSpreadsheetId(authUser.email, authUser.uid);
+
         setConfig((prev) => {
-          const next = { ...prev, accessToken: token, status: 'connected' as const };
-          saveStoredConfig(next);
+          const effectiveSheetId = prev.spreadsheetId || savedSheetId;
+          const next = {
+            ...prev,
+            spreadsheetId: effectiveSheetId,
+            accessToken: token,
+            status: 'connected' as const,
+          };
+          saveStoredConfig(next, authUser.email, authUser.uid);
           return next;
         });
+
+        // If no spreadsheet ID is stored locally, discover automatically from user's Drive
+        if (!savedSheetId) {
+          findExistingFinancesSpreadsheet(token).then((discoveredId) => {
+            if (discoveredId) {
+              setPersistentSpreadsheetId(discoveredId, authUser.email, authUser.uid);
+              setConfig((prev) => {
+                const next = {
+                  ...prev,
+                  spreadsheetId: discoveredId,
+                  status: 'connected' as const,
+                };
+                saveStoredConfig(next, authUser.email, authUser.uid);
+                return next;
+              });
+            }
+          });
+        }
       },
       () => {
         setUser(null);
@@ -147,13 +182,16 @@ export default function App() {
   }, [user, accessToken, syncWithSheet]);
 
   // Financial summary calculations
-  const { totalIncome, totalExpenses, netBalance } = useMemo(() => {
+  const { totalIncome, totalExpenses, totalInvestments, netBalance } = useMemo(() => {
     let inc = 0;
     let exp = 0;
+    let inv = 0;
 
     transactions.forEach((tx) => {
       if (tx.type === 'Income') {
         inc += tx.amount;
+      } else if (tx.type === 'Investment') {
+        inv += tx.amount;
       } else {
         exp += tx.amount;
       }
@@ -162,7 +200,8 @@ export default function App() {
     return {
       totalIncome: inc,
       totalExpenses: exp,
-      netBalance: inc - exp,
+      totalInvestments: inv,
+      netBalance: inc - exp - inv,
     };
   }, [transactions]);
 
@@ -234,12 +273,14 @@ export default function App() {
     setUser(null);
     setAccessToken(null);
     setTransactions([]);
-    setCategories({ incomeCategories: [], expenseCategories: [] });
-    setConfig({
-      spreadsheetId: '',
+    setCategories({ incomeCategories: [], expenseCategories: [], investmentCategories: [] });
+    // Keep the last linked spreadsheetId in config so it remains available immediately upon next login
+    setConfig((prev) => ({
+      spreadsheetId: prev.spreadsheetId || getPersistentSpreadsheetId(),
+      accessToken: undefined,
       status: 'idle',
       lastSyncedAt: null,
-    });
+    }));
   }, []);
 
   // Mobile Jump to Income
@@ -251,6 +292,12 @@ export default function App() {
   // Mobile Jump to Expense
   const handleMobileJumpExpense = () => {
     setFormInitialType('Expense');
+    setMobileTab('add');
+  };
+
+  // Mobile Jump to Investment
+  const handleMobileJumpInvestment = () => {
+    setFormInitialType('Investment');
     setMobileTab('add');
   };
 
@@ -271,11 +318,36 @@ export default function App() {
         onAuthSuccess={(authUser, token) => {
           setUser(authUser);
           setAccessToken(token);
+          const savedSheetId = getPersistentSpreadsheetId(authUser.email, authUser.uid);
           setConfig((prev) => {
-            const next = { ...prev, accessToken: token, status: 'connected' as const };
-            saveStoredConfig(next);
+            const effectiveSheetId = prev.spreadsheetId || savedSheetId;
+            const next = {
+              ...prev,
+              spreadsheetId: effectiveSheetId,
+              accessToken: token,
+              status: 'connected' as const,
+            };
+            saveStoredConfig(next, authUser.email, authUser.uid);
             return next;
           });
+
+          // Discover from Drive if nothing found locally
+          if (!savedSheetId) {
+            findExistingFinancesSpreadsheet(token).then((discoveredId) => {
+              if (discoveredId) {
+                setPersistentSpreadsheetId(discoveredId, authUser.email, authUser.uid);
+                setConfig((prev) => {
+                  const next = {
+                    ...prev,
+                    spreadsheetId: discoveredId,
+                    status: 'connected' as const,
+                  };
+                  saveStoredConfig(next, authUser.email, authUser.uid);
+                  return next;
+                });
+              }
+            });
+          }
         }}
       />
     );
@@ -377,6 +449,7 @@ export default function App() {
             }}
             onSignOut={handleSignOut}
             onSelectSpreadsheet={(newId) => {
+              setPersistentSpreadsheetId(newId, user?.email, user?.uid);
               setConfig((prev) => {
                 const next = {
                   ...prev,
@@ -384,7 +457,7 @@ export default function App() {
                   status: 'connected' as const,
                   lastSyncedAt: new Date().toISOString(),
                 };
-                saveStoredConfig(next);
+                saveStoredConfig(next, user?.email, user?.uid);
                 return next;
               });
               setTimeout(() => syncWithSheet(), 300);
@@ -416,6 +489,7 @@ export default function App() {
           <SummaryCards
             totalIncome={totalIncome}
             totalExpenses={totalExpenses}
+            totalInvestments={totalInvestments}
             netBalance={netBalance}
           />
 
@@ -425,6 +499,7 @@ export default function App() {
               <ExpensePieChart
                 transactions={transactions}
                 expenseCategories={categories.expenseCategories}
+                investmentCategories={categories.investmentCategories}
                 height={260}
               />
             </div>
@@ -467,22 +542,22 @@ export default function App() {
           {/* MOBILE TAB: HOME */}
           {mobileTab === 'home' && (
             <div className="space-y-4">
-              {/* Large, easy-to-tap Plus (+) and Minus (-) buttons right at top */}
+              {/* Large, easy-to-tap quick action buttons right at top */}
               <div
                 id="mobile-quick-actions"
-                className="grid grid-cols-2 gap-3 p-1 rounded-xl bg-neutral-900/80 border border-neutral-800/90 shadow-md"
+                className="grid grid-cols-3 gap-2 p-1.5 rounded-xl bg-neutral-900/80 border border-neutral-800/90 shadow-md"
               >
                 {/* Plus (+) Button: Log Income */}
                 <button
                   type="button"
                   id="mobile-btn-add-income"
                   onClick={handleMobileJumpIncome}
-                  className="flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-lg bg-emerald-600 active:bg-emerald-500 text-white font-semibold text-sm shadow-lg shadow-emerald-950/50 transition-transform active:scale-98 min-h-[52px]"
+                  className="flex flex-col sm:flex-row items-center justify-center gap-1.5 py-3 px-2 rounded-lg bg-emerald-600 active:bg-emerald-500 text-white font-semibold text-xs shadow-lg shadow-emerald-950/50 transition-transform active:scale-98 min-h-[50px]"
                 >
-                  <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center">
-                    <Plus className="w-4 h-4 text-white stroke-[2.5]" />
+                  <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+                    <Plus className="w-3.5 h-3.5 text-white stroke-[2.5]" />
                   </div>
-                  <span>Log Income</span>
+                  <span>Income</span>
                 </button>
 
                 {/* Minus (-) Button: Log Expense */}
@@ -490,12 +565,25 @@ export default function App() {
                   type="button"
                   id="mobile-btn-add-expense"
                   onClick={handleMobileJumpExpense}
-                  className="flex items-center justify-center gap-2.5 py-3.5 px-4 rounded-lg bg-rose-600 active:bg-rose-500 text-white font-semibold text-sm shadow-lg shadow-rose-950/50 transition-transform active:scale-98 min-h-[52px]"
+                  className="flex flex-col sm:flex-row items-center justify-center gap-1.5 py-3 px-2 rounded-lg bg-rose-600 active:bg-rose-500 text-white font-semibold text-xs shadow-lg shadow-rose-950/50 transition-transform active:scale-98 min-h-[50px]"
                 >
-                  <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center">
-                    <Minus className="w-4 h-4 text-white stroke-[2.5]" />
+                  <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+                    <Minus className="w-3.5 h-3.5 text-white stroke-[2.5]" />
                   </div>
-                  <span>Log Expense</span>
+                  <span>Expense</span>
+                </button>
+
+                {/* TrendingUp (↗) Button: Log Investment */}
+                <button
+                  type="button"
+                  id="mobile-btn-add-investment"
+                  onClick={handleMobileJumpInvestment}
+                  className="flex flex-col sm:flex-row items-center justify-center gap-1.5 py-3 px-2 rounded-lg bg-violet-600 active:bg-violet-500 text-white font-semibold text-xs shadow-lg shadow-violet-950/50 transition-transform active:scale-98 min-h-[50px]"
+                >
+                  <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+                    <TrendingUp className="w-3.5 h-3.5 text-white stroke-[2.5]" />
+                  </div>
+                  <span>Invest</span>
                 </button>
               </div>
 
@@ -503,14 +591,16 @@ export default function App() {
               <SummaryCards
                 totalIncome={totalIncome}
                 totalExpenses={totalExpenses}
+                totalInvestments={totalInvestments}
                 netBalance={netBalance}
                 compact={true}
               />
 
-              {/* Expense Pie Chart right away on Home */}
+              {/* Expense & Investment Pie Chart right away on Home */}
               <ExpensePieChart
                 transactions={transactions}
                 expenseCategories={categories.expenseCategories}
+                investmentCategories={categories.investmentCategories}
                 height={220}
               />
 
@@ -563,7 +653,7 @@ export default function App() {
               <ExpensePieChart
                 transactions={transactions}
                 expenseCategories={categories.expenseCategories}
-                title="Expense Breakdown"
+                investmentCategories={categories.investmentCategories}
                 height={240}
               />
               <TrendLineChart transactions={transactions} height={260} />

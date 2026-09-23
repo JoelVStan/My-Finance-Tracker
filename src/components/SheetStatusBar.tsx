@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SheetConnectionConfig } from '../types';
 import { Database, RefreshCw, CheckCircle2, Sliders, ExternalLink } from 'lucide-react';
+import { setPersistentSpreadsheetId } from '../services/googleSheetsService';
 
 interface SheetStatusBarProps {
   config: SheetConnectionConfig;
@@ -34,9 +35,11 @@ export const SheetStatusBar: React.FC<SheetStatusBarProps> = ({
     if (match) {
       id = match[1];
     }
+    const finalId = id || config.spreadsheetId;
+    setPersistentSpreadsheetId(finalId);
     onUpdateConfig({
       ...config,
-      spreadsheetId: id || config.spreadsheetId,
+      spreadsheetId: finalId,
       lastSyncedAt: new Date().toISOString(),
     });
     setShowConfigModal(false);

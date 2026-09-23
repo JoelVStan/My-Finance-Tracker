@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { TransactionType, CategoriesData } from '../types';
-import { PlusCircle, MinusCircle, Calendar, Tag, FileText, CheckCircle2 } from 'lucide-react';
+import { PlusCircle, MinusCircle, TrendingUp, Calendar, Tag, FileText, CheckCircle2 } from 'lucide-react';
 import { fromInputDateFormat } from '../utils/dateUtils';
 
 interface TransactionFormProps {
@@ -39,9 +39,13 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
   }, [initialType]);
 
   // Dynamic categories based on tab structure:
-  // Income categories for Income, Expense categories for Expense
+  // Income categories for Income, Expense categories for Expense, Investment categories for Investment
   const activeCategoryList =
-    type === 'Income' ? categories.incomeCategories : categories.expenseCategories;
+    type === 'Income'
+      ? categories.incomeCategories
+      : type === 'Investment'
+      ? categories.investmentCategories || []
+      : categories.expenseCategories;
 
   // Whenever category list or type changes, ensure valid category is selected
   useEffect(() => {
@@ -107,7 +111,11 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-sm font-semibold text-neutral-100">
-            {type === 'Income' ? 'Log Income' : 'Log Expenditure'}
+            {type === 'Income'
+              ? 'Log Income'
+              : type === 'Investment'
+              ? 'Log Investment'
+              : 'Log Expenditure'}
           </h3>
           <p className="text-xs text-neutral-400 mt-0.5">
             Writes row to spreadsheet &quot;Transactions&quot; tab
@@ -120,33 +128,46 @@ export const TransactionForm: React.FC<TransactionFormProps> = ({
         </span>
       </div>
 
-      {/* Type Selector Tabs */}
-      <div className="grid grid-cols-2 gap-2 mb-4 p-1 rounded-lg bg-neutral-950 border border-neutral-800">
+      {/* Type Selector Tabs (3 options: Expense, Income, Investment) */}
+      <div className="grid grid-cols-3 gap-1.5 mb-4 p-1 rounded-lg bg-neutral-950 border border-neutral-800">
         <button
           type="button"
           id="form-tab-expense"
           onClick={() => setType('Expense')}
-          className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-all ${
+          className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-md text-xs font-semibold transition-all ${
             type === 'Expense'
               ? 'bg-rose-500/15 text-rose-300 border border-rose-500/30 shadow-sm'
               : 'text-neutral-400 hover:text-neutral-200'
           }`}
         >
-          <MinusCircle className="w-4 h-4 text-rose-400" />
-          Expense
+          <MinusCircle className="w-3.5 h-3.5 text-rose-400 flex-shrink-0" />
+          <span className="truncate">Expense</span>
         </button>
         <button
           type="button"
           id="form-tab-income"
           onClick={() => setType('Income')}
-          className={`flex items-center justify-center gap-2 py-2 px-3 rounded-md text-xs font-semibold transition-all ${
+          className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-md text-xs font-semibold transition-all ${
             type === 'Income'
               ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 shadow-sm'
               : 'text-neutral-400 hover:text-neutral-200'
           }`}
         >
-          <PlusCircle className="w-4 h-4 text-emerald-400" />
-          Income
+          <PlusCircle className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
+          <span className="truncate">Income</span>
+        </button>
+        <button
+          type="button"
+          id="form-tab-investment"
+          onClick={() => setType('Investment')}
+          className={`flex items-center justify-center gap-1.5 py-2 px-2 rounded-md text-xs font-semibold transition-all ${
+            type === 'Investment'
+              ? 'bg-violet-500/15 text-violet-300 border border-violet-500/30 shadow-sm'
+              : 'text-neutral-400 hover:text-neutral-200'
+          }`}
+        >
+          <TrendingUp className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />
+          <span className="truncate">Investment</span>
         </button>
       </div>
 

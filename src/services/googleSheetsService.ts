@@ -1,8 +1,20 @@
-import { Transaction, CategoriesData, SheetConnectionConfig } from '../types';
+import { Transaction, TransactionType, CategoriesData, SheetConnectionConfig } from '../types';
 import { getCachedAccessToken } from './authService';
 import { formatToDDMMYYYY } from '../utils/dateUtils';
 
 export const DEFAULT_INCOME_CATEGORIES: string[] = ['Salary', 'Others', 'Gift'];
+
+export const DEFAULT_INVESTMENT_CATEGORIES: string[] = [
+  'Mutual Funds',
+  'Stocks',
+  'Fixed Deposit',
+  'Gold',
+  'Crypto',
+  'PPF / EPF',
+  'Real Estate',
+  'NPS',
+  'Others',
+];
 
 export const DEFAULT_EXPENSE_CATEGORIES: string[] = [
   'Shopping',
@@ -16,13 +28,58 @@ export const DEFAULT_EXPENSE_CATEGORIES: string[] = [
   'Utilities',
   'Entertainment',
   'Others',
-  'Investment',
   'Education',
 ];
 
 const LOCAL_STORAGE_TRANSACTIONS_KEY = 'income_expense_tracker_transactions';
 const LOCAL_STORAGE_CATEGORIES_KEY = 'income_expense_tracker_categories';
 const LOCAL_STORAGE_CONFIG_KEY = 'income_expense_tracker_config';
+export const PERSISTENT_SPREADSHEET_KEY = 'last_linked_spreadsheet_id';
+
+export function getPersistentSpreadsheetId(email?: string | null, uid?: string | null): string {
+  if (typeof window === 'undefined') return DEFAULT_SPREADSHEET_ID;
+
+  if (email && email.trim()) {
+    const byEmail = localStorage.getItem(`last_linked_sheet_${email.toLowerCase().trim()}`);
+    if (byEmail && byEmail.trim()) return byEmail.trim();
+  }
+  if (uid && uid.trim()) {
+    const byUid = localStorage.getItem(`last_linked_sheet_${uid.trim()}`);
+    if (byUid && byUid.trim()) return byUid.trim();
+  }
+  const globalLast = localStorage.getItem(PERSISTENT_SPREADSHEET_KEY);
+  if (globalLast && globalLast.trim()) return globalLast.trim();
+
+  // Also check if config has one
+  const saved = localStorage.getItem(LOCAL_STORAGE_CONFIG_KEY);
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed.spreadsheetId && typeof parsed.spreadsheetId === 'string' && parsed.spreadsheetId.trim()) {
+        return parsed.spreadsheetId.trim();
+      }
+    } catch {
+      // ignore
+    }
+  }
+  return DEFAULT_SPREADSHEET_ID;
+}
+
+export function setPersistentSpreadsheetId(
+  sheetId: string,
+  email?: string | null,
+  uid?: string | null
+): void {
+  if (typeof window === 'undefined' || !sheetId || !sheetId.trim()) return;
+  const cleanId = sheetId.trim();
+  localStorage.setItem(PERSISTENT_SPREADSHEET_KEY, cleanId);
+  if (email && email.trim()) {
+    localStorage.setItem(`last_linked_sheet_${email.toLowerCase().trim()}`, cleanId);
+  }
+  if (uid && uid.trim()) {
+    localStorage.setItem(`last_linked_sheet_${uid.trim()}`, cleanId);
+  }
+}
 
 export const DEFAULT_SPREADSHEET_ID =
   (typeof window !== 'undefined' &&
@@ -62,30 +119,43 @@ export function getAccessToken(): string | null {
 }
 
 export function loadStoredConfig(): SheetConnectionConfig {
+  const rememberedSheetId = getPersistentSpreadsheetId();
   if (typeof window === 'undefined') {
     return {
-      spreadsheetId: DEFAULT_SPREADSHEET_ID,
+      spreadsheetId: rememberedSheetId,
       status: 'idle',
     };
   }
   const saved = localStorage.getItem(LOCAL_STORAGE_CONFIG_KEY);
   if (saved) {
     try {
-      return JSON.parse(saved);
+      const parsed = JSON.parse(saved);
+      return {
+        ...parsed,
+        spreadsheetId: parsed.spreadsheetId || rememberedSheetId,
+        status: parsed.status || 'idle',
+      };
     } catch {
       // fallback
     }
   }
   return {
-    spreadsheetId: DEFAULT_SPREADSHEET_ID,
+    spreadsheetId: rememberedSheetId,
     status: 'idle',
     lastSyncedAt: null,
   };
 }
 
-export function saveStoredConfig(config: SheetConnectionConfig): void {
+export function saveStoredConfig(
+  config: SheetConnectionConfig,
+  email?: string | null,
+  uid?: string | null
+): void {
   if (typeof window !== 'undefined') {
     localStorage.setItem(LOCAL_STORAGE_CONFIG_KEY, JSON.stringify(config));
+    if (config.spreadsheetId && config.spreadsheetId.trim()) {
+      setPersistentSpreadsheetId(config.spreadsheetId, email, uid);
+    }
   }
 }
 
@@ -105,9 +175,9 @@ export function loadStoredTransactions(): Transaction[] {
 
 export function clearStoredData(): void {
   if (typeof window !== 'undefined') {
+    // Only clear private session transaction cache, NOT the spreadsheet link ID
     localStorage.removeItem(LOCAL_STORAGE_TRANSACTIONS_KEY);
     localStorage.removeItem(LOCAL_STORAGE_CATEGORIES_KEY);
-    localStorage.removeItem(LOCAL_STORAGE_CONFIG_KEY);
   }
 }
 
@@ -122,6 +192,7 @@ export function loadStoredCategories(): CategoriesData {
     return {
       incomeCategories: DEFAULT_INCOME_CATEGORIES,
       expenseCategories: DEFAULT_EXPENSE_CATEGORIES,
+      investmentCategories: DEFAULT_INVESTMENT_CATEGORIES,
     };
   }
   const saved = localStorage.getItem(LOCAL_STORAGE_CATEGORIES_KEY);
@@ -133,7 +204,13 @@ export function loadStoredCategories(): CategoriesData {
         Array.isArray(parsed.incomeCategories) &&
         Array.isArray(parsed.expenseCategories)
       ) {
-        return parsed;
+        return {
+          incomeCategories: parsed.incomeCategories,
+          expenseCategories: parsed.expenseCategories,
+          investmentCategories: Array.isArray(parsed.investmentCategories) && parsed.investmentCategories.length > 0
+            ? parsed.investmentCategories
+            : DEFAULT_INVESTMENT_CATEGORIES,
+        };
       }
     } catch {
       // fallback
@@ -142,6 +219,7 @@ export function loadStoredCategories(): CategoriesData {
   const defaults: CategoriesData = {
     incomeCategories: DEFAULT_INCOME_CATEGORIES,
     expenseCategories: DEFAULT_EXPENSE_CATEGORIES,
+    investmentCategories: DEFAULT_INVESTMENT_CATEGORIES,
   };
   localStorage.setItem(LOCAL_STORAGE_CATEGORIES_KEY, JSON.stringify(defaults));
   return defaults;
@@ -180,12 +258,13 @@ export class GoogleSheetsService {
    * Fetches Categories from Tab: "Categories"
    * Column A: "Income Categories"
    * Column B: "Expense Categories"
+   * Column C: "Investment Categories"
    */
   async fetchCategories(): Promise<{ data: CategoriesData; fromRemote: boolean }> {
     try {
       const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
         this.spreadsheetId
-      )}/values/Categories!A:B`;
+      )}/values/Categories!A:C`;
 
       const response = await fetch(url, {
         method: 'GET',
@@ -201,11 +280,13 @@ export class GoogleSheetsService {
 
       const incomeCategories: string[] = [];
       const expenseCategories: string[] = [];
+      const investmentCategories: string[] = [];
 
       // Process rows, skipping header names if present
       for (let i = 0; i < rows.length; i++) {
         const colA = rows[i][0]?.trim();
         const colB = rows[i][1]?.trim();
+        const colC = rows[i][2]?.trim();
 
         if (i === 0) {
           if (colA && colA.toLowerCase() !== 'income categories' && colA.toLowerCase() !== 'income') {
@@ -213,6 +294,9 @@ export class GoogleSheetsService {
           }
           if (colB && colB.toLowerCase() !== 'expense categories' && colB.toLowerCase() !== 'expense') {
             expenseCategories.push(colB);
+          }
+          if (colC && colC.toLowerCase() !== 'investment categories' && colC.toLowerCase() !== 'investment' && colC.toLowerCase() !== 'investments') {
+            investmentCategories.push(colC);
           }
           continue;
         }
@@ -223,11 +307,15 @@ export class GoogleSheetsService {
         if (colB && !expenseCategories.includes(colB)) {
           expenseCategories.push(colB);
         }
+        if (colC && !investmentCategories.includes(colC)) {
+          investmentCategories.push(colC);
+        }
       }
 
       const result: CategoriesData = {
         incomeCategories: incomeCategories.length > 0 ? incomeCategories : DEFAULT_INCOME_CATEGORIES,
         expenseCategories: expenseCategories.length > 0 ? expenseCategories : DEFAULT_EXPENSE_CATEGORIES,
+        investmentCategories: investmentCategories.length > 0 ? investmentCategories : DEFAULT_INVESTMENT_CATEGORIES,
       };
 
       saveStoredCategories(result);
@@ -275,9 +363,19 @@ export class GoogleSheetsService {
 
         const rawDate = row[0]?.trim();
         const date = formatToDDMMYYYY(rawDate);
-        const rawType = row[1]?.trim() || 'Expense';
-        const type = rawType.toLowerCase() === 'income' ? 'Income' : 'Expense';
-        const category = row[2]?.trim() || (type === 'Income' ? 'Salary' : 'Others');
+        const rawType = (row[1] || '').trim().toLowerCase();
+        let type: TransactionType = 'Expense';
+        if (rawType === 'income') {
+          type = 'Income';
+        } else if (rawType === 'investment' || rawType === 'investments') {
+          type = 'Investment';
+        } else {
+          type = 'Expense';
+        }
+
+        const category =
+          row[2]?.trim() ||
+          (type === 'Income' ? 'Salary' : type === 'Investment' ? 'Mutual Funds' : 'Others');
         const amount = parseFloat(row[3]?.toString().replace(/[^0-9.-]/g, '') || '0') || 0;
         const description = row[4]?.trim() || '';
 
@@ -403,36 +501,40 @@ export class GoogleSheetsService {
    * Updates Categories in Tab: "Categories"
    * Column A: "Income Categories"
    * Column B: "Expense Categories"
+   * Column C: "Investment Categories"
    */
   async updateCategories(categories: CategoriesData): Promise<{ success: boolean; fromRemote: boolean }> {
     saveStoredCategories(categories);
 
     try {
+      const investmentCats = categories.investmentCategories || DEFAULT_INVESTMENT_CATEGORIES;
       const maxRows = Math.max(
         categories.incomeCategories.length,
-        categories.expenseCategories.length
+        categories.expenseCategories.length,
+        investmentCats.length
       );
 
       const rows: string[][] = [
-        ['Income Categories', 'Expense Categories'],
+        ['Income Categories', 'Expense Categories', 'Investment Categories'],
       ];
 
       for (let i = 0; i < maxRows; i++) {
         rows.push([
           categories.incomeCategories[i] || '',
           categories.expenseCategories[i] || '',
+          investmentCats[i] || '',
         ]);
       }
 
       const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(
         this.spreadsheetId
-      )}/values/Categories!A:B?valueInputOption=USER_ENTERED`;
+      )}/values/Categories!A:C?valueInputOption=USER_ENTERED`;
 
       const response = await fetch(url, {
         method: 'PUT',
         headers: this.getHeaders(),
         body: JSON.stringify({
-          range: 'Categories!A:B',
+          range: 'Categories!A:C',
           majorDimension: 'ROWS',
           values: rows,
         }),

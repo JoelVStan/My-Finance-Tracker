@@ -1,4 +1,4 @@
-export type TransactionType = 'Income' | 'Expense';
+export type TransactionType = 'Income' | 'Expense' | 'Investment';
 
 export interface Transaction {
   id: string;
@@ -12,6 +12,7 @@ export interface Transaction {
 export interface CategoriesData {
   incomeCategories: string[]; // Column A from "Categories" tab
   expenseCategories: string[]; // Column B from "Categories" tab
+  investmentCategories: string[]; // Column C from "Categories" tab
 }
 
 export type MobileTab = 'home' | 'add' | 'analysis' | 'history';

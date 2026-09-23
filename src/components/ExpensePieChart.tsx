@@ -157,7 +157,7 @@ export const ExpensePieChart: React.FC<ExpensePieChartProps> = ({
   return (
     <div
       id="expense-pie-chart-card"
-      className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5 flex flex-col justify-between overflow-hidden"
+      className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5 flex flex-col justify-between overflow-hidden h-full"
     >
       {/* Header Container */}
       <div className="flex flex-col gap-2.5 mb-3">
@@ -242,7 +242,7 @@ export const ExpensePieChart: React.FC<ExpensePieChartProps> = ({
       </div>
 
       {chartData.length === 0 ? (
-        <div className="h-48 flex flex-col items-center justify-center text-center p-4">
+        <div className="h-48 flex flex-col items-center justify-center text-center p-4 flex-1">
           <div className="w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center text-neutral-400 mb-2">
             {viewType === 'Expense' ? (
               <PieIcon className="w-5 h-5 text-rose-400/80" />
@@ -260,7 +260,7 @@ export const ExpensePieChart: React.FC<ExpensePieChartProps> = ({
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center mt-2">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center mt-2 flex-1">
           {/* Pie Visualizer */}
           <div className="md:col-span-6 w-full flex items-center justify-center" style={{ height }}>
             <ResponsiveContainer width="100%" height="100%">

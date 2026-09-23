@@ -22,6 +22,7 @@ import { ExpensePieChart } from './components/ExpensePieChart';
 import { TrendLineChart } from './components/TrendLineChart';
 import { TransactionForm } from './components/TransactionForm';
 import { RecentTransactions } from './components/RecentTransactions';
+import { AnnualOverview } from './components/AnnualOverview';
 import { MobileNav } from './components/MobileNav';
 import { SheetStatusBar } from './components/SheetStatusBar';
 import { CategoryManagerModal } from './components/CategoryManagerModal';
@@ -34,6 +35,7 @@ import {
   googleSignOut,
   findExistingFinancesSpreadsheet,
 } from './services/authService';
+import { getTransactionYear, getDistinctYears } from './utils/dateUtils';
 import {
   Plus,
   Minus,
@@ -45,6 +47,9 @@ import {
   ExternalLink,
   Loader2,
   LogOut,
+  Calendar,
+  BarChart3,
+  Layers,
 } from 'lucide-react';
 
 export default function App() {
@@ -57,6 +62,9 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(getCachedAccessToken());
   const [authLoading, setAuthLoading] = useState(true);
+  const [selectedYear, setSelectedYear] = useState<number | 'ALL'>('ALL');
+  const [dashboardView, setDashboardView] = useState<'dashboard' | 'annual'>('dashboard');
+  const [mobileAnalysisView, setMobileAnalysisView] = useState<'charts' | 'annual'>('charts');
   const isDeletingRef = useRef(false);
 
   // Initialize service
@@ -181,13 +189,24 @@ export default function App() {
     };
   }, [user, accessToken, syncWithSheet]);
 
+  // Available distinct years from recorded transactions (includes current calendar year)
+  const availableYears = useMemo(() => {
+    return getDistinctYears(transactions.map((t) => t.date));
+  }, [transactions]);
+
+  // Transactions filtered by selected year (or all if 'ALL')
+  const filteredTransactions = useMemo(() => {
+    if (selectedYear === 'ALL') return transactions;
+    return transactions.filter((tx) => getTransactionYear(tx.date) === selectedYear);
+  }, [transactions, selectedYear]);
+
   // Financial summary calculations
   const { totalIncome, totalExpenses, totalInvestments, netBalance } = useMemo(() => {
     let inc = 0;
     let exp = 0;
     let inv = 0;
 
-    transactions.forEach((tx) => {
+    filteredTransactions.forEach((tx) => {
       if (tx.type === 'Income') {
         inc += tx.amount;
       } else if (tx.type === 'Investment') {
@@ -203,7 +222,7 @@ export default function App() {
       totalInvestments: inv,
       netBalance: inc - exp - inv,
     };
-  }, [transactions]);
+  }, [filteredTransactions]);
 
   // Handler: Add new transaction
   const handleAddTransaction = async (newTxData: {
@@ -476,67 +495,144 @@ export default function App() {
           openCategoryManager={() => setIsCategoryModalOpen(true)}
         />
 
-        {/* ======================================================== */}
-        {/* DESKTOP VIEW: Unified Dashboard Grid (no tabs needed)     */}
-        {/* "Instead of a bottom bar, use a clean layout that fits    */}
-        {/*  the wider screen. Use a dashboard grid so the summary    */}
-        {/*  cards, both analysis charts (pie and trend line), input   */}
-        {/*  forms, and transaction logs are all visible on one       */}
-        {/*  single screen without needing to switch tabs."           */}
-        {/* ======================================================== */}
-        <div className="hidden md:flex flex-col space-y-6">
-          {/* Top Row: Summary Cards */}
-          <SummaryCards
-            totalIncome={totalIncome}
-            totalExpenses={totalExpenses}
-            totalInvestments={totalInvestments}
-            netBalance={netBalance}
-          />
+        {/* Global Year Filter & View Switcher Bar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-neutral-900/60 border border-neutral-800 rounded-xl p-3 sm:px-4 mb-6 shadow-sm">
+          {/* Year Pills Filter */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-neutral-400 shrink-0 mr-1">
+              <Calendar className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Year:</span>
+            </div>
 
-          {/* Middle Row: Both Analysis Charts Side-by-Side */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div className="lg:col-span-5">
-              <ExpensePieChart
-                transactions={transactions}
-                expenseCategories={categories.expenseCategories}
-                investmentCategories={categories.investmentCategories}
-                height={260}
-              />
-            </div>
-            <div className="lg:col-span-7">
-              <TrendLineChart transactions={transactions} height={260} />
-            </div>
+            {/* All Time Pill */}
+            <button
+              type="button"
+              onClick={() => setSelectedYear('ALL')}
+              className={`px-3 py-1 text-xs font-medium rounded-lg transition-all shrink-0 cursor-pointer ${
+                selectedYear === 'ALL'
+                  ? 'bg-emerald-600 text-white shadow-md shadow-emerald-950/50'
+                  : 'bg-neutral-950 text-neutral-400 hover:text-neutral-200 border border-neutral-800/80 hover:border-neutral-700'
+              }`}
+            >
+              All Time ({transactions.length})
+            </button>
+
+            {/* Individual Year Pills */}
+            {availableYears.map((yr) => {
+              const countInYr = transactions.filter((t) => getTransactionYear(t.date) === yr).length;
+              return (
+                <button
+                  key={yr}
+                  type="button"
+                  onClick={() => setSelectedYear(yr)}
+                  className={`px-3 py-1 text-xs font-medium rounded-lg transition-all shrink-0 cursor-pointer ${
+                    selectedYear === yr
+                      ? 'bg-emerald-600 text-white shadow-md shadow-emerald-950/50'
+                      : 'bg-neutral-950 text-neutral-400 hover:text-neutral-200 border border-neutral-800/80 hover:border-neutral-700'
+                  }`}
+                >
+                  {yr} {countInYr > 0 ? `(${countInYr})` : ''}
+                </button>
+              );
+            })}
           </div>
 
-          {/* Bottom Row: Input Form + Recent Activity Table */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            <div className="lg:col-span-4">
-              <TransactionForm
-                categories={categories}
-                initialType="Expense"
-                onSubmit={handleAddTransaction}
-              />
-            </div>
-            <div className="lg:col-span-8">
-              <RecentTransactions
-                transactions={transactions}
-                onDeleteTransaction={handleDeleteTransaction}
-                limit={15}
-                showControls={true}
-              />
+          {/* Desktop View Switcher: Dashboard vs Annual YoY Review */}
+          <div className="hidden md:flex items-center gap-2 shrink-0">
+            <div className="inline-flex rounded-lg bg-neutral-950 p-0.5 border border-neutral-800">
+              <button
+                type="button"
+                onClick={() => setDashboardView('dashboard')}
+                className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+                  dashboardView === 'dashboard'
+                    ? 'bg-neutral-800 text-neutral-100 shadow-sm'
+                    : 'text-neutral-400 hover:text-neutral-200'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Dashboard</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDashboardView('annual')}
+                className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+                  dashboardView === 'annual'
+                    ? 'bg-neutral-800 text-emerald-300 shadow-sm'
+                    : 'text-neutral-400 hover:text-neutral-200'
+                }`}
+              >
+                <BarChart3 className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Annual Review (YoY)</span>
+              </button>
             </div>
           </div>
         </div>
 
         {/* ======================================================== */}
+        {/* DESKTOP VIEW: Unified Dashboard Grid or Annual YoY View  */}
+        {/* ======================================================== */}
+        <div className="hidden md:block">
+          {dashboardView === 'annual' ? (
+            <AnnualOverview
+              transactions={transactions}
+              selectedYear={selectedYear}
+              onSelectYear={(yr) => {
+                setSelectedYear(yr);
+                setDashboardView('dashboard');
+              }}
+              spreadsheetId={config.spreadsheetId}
+            />
+          ) : (
+            <div className="flex flex-col space-y-6">
+              {/* Top Row: Summary Cards */}
+              <SummaryCards
+                totalIncome={totalIncome}
+                totalExpenses={totalExpenses}
+                totalInvestments={totalInvestments}
+                netBalance={netBalance}
+                periodLabel={selectedYear === 'ALL' ? 'All Time' : String(selectedYear)}
+              />
+
+              {/* Middle Row: Both Analysis Charts Side-by-Side */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+                <div className="lg:col-span-5 flex flex-col">
+                  <ExpensePieChart
+                    transactions={filteredTransactions}
+                    expenseCategories={categories.expenseCategories}
+                    investmentCategories={categories.investmentCategories}
+                    height={260}
+                  />
+                </div>
+                <div className="lg:col-span-7 flex flex-col">
+                  <TrendLineChart transactions={filteredTransactions} height={260} />
+                </div>
+              </div>
+
+              {/* Bottom Row: Input Form + Recent Activity Table */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                <div className="lg:col-span-4">
+                  <TransactionForm
+                    categories={categories}
+                    initialType="Expense"
+                    onSubmit={handleAddTransaction}
+                  />
+                </div>
+                <div className="lg:col-span-8">
+                  <RecentTransactions
+                    transactions={filteredTransactions}
+                    onDeleteTransaction={handleDeleteTransaction}
+                    limit={15}
+                    showControls={true}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ======================================================== */}
         {/* MOBILE VIEW: Tab-driven with sticky bottom navigation     */}
-        {/* "Make it feel like a mobile app with a sticky navigation  */}
-        {/*  bar at the bottom of the screen to switch smoothly       */}
-        {/*  between views (Home, Add New, Analysis, History).        */}
-        {/*  The landing page (Home) must show the Net Balance, Total */}
-        {/*  Income, and the Expense Pie Chart right away.            */}
-        {/*  Put large, easy-to-tap Plus (+) and Minus (-) buttons    */}
-        {/*  right at the top of the mobile homepage (above fold)..." */}
         {/* ======================================================== */}
         <div className="md:hidden space-y-5">
           {/* MOBILE TAB: HOME */}
@@ -587,18 +683,19 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Landing Page Summary Cards: Shows Net Balance and Total Income right away */}
+              {/* Landing Page Summary Cards */}
               <SummaryCards
                 totalIncome={totalIncome}
                 totalExpenses={totalExpenses}
                 totalInvestments={totalInvestments}
                 netBalance={netBalance}
                 compact={true}
+                periodLabel={selectedYear === 'ALL' ? 'All Time' : String(selectedYear)}
               />
 
               {/* Expense & Investment Pie Chart right away on Home */}
               <ExpensePieChart
-                transactions={transactions}
+                transactions={filteredTransactions}
                 expenseCategories={categories.expenseCategories}
                 investmentCategories={categories.investmentCategories}
                 height={220}
@@ -608,7 +705,7 @@ export default function App() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-semibold uppercase tracking-wider text-neutral-400">
-                    Latest Activity
+                    Latest Activity {selectedYear !== 'ALL' ? `(${selectedYear})` : ''}
                   </h4>
                   <button
                     type="button"
@@ -620,7 +717,7 @@ export default function App() {
                   </button>
                 </div>
                 <RecentTransactions
-                  transactions={transactions}
+                  transactions={filteredTransactions}
                   onDeleteTransaction={handleDeleteTransaction}
                   limit={4}
                   showControls={false}
@@ -637,7 +734,6 @@ export default function App() {
                 initialType={formInitialType}
                 onSubmit={handleAddTransaction}
                 onSuccess={() => {
-                  // Switch to home after short timeout
                   setTimeout(() => setMobileTab('home'), 1000);
                 }}
               />
@@ -645,18 +741,57 @@ export default function App() {
           )}
 
           {/* MOBILE TAB: ANALYSIS */}
-          {/* "The 'Analysis' tab will open a dedicated page showing both  */}
-          {/*  the Expense Pie Chart and the Income vs. Expenditure       */}
-          {/*  Trend Line Chart clearly."                                */}
           {mobileTab === 'analysis' && (
-            <div className="space-y-5">
-              <ExpensePieChart
-                transactions={transactions}
-                expenseCategories={categories.expenseCategories}
-                investmentCategories={categories.investmentCategories}
-                height={240}
-              />
-              <TrendLineChart transactions={transactions} height={260} />
+            <div className="space-y-4">
+              {/* Mobile Sub-view Toggle */}
+              <div className="flex rounded-xl bg-neutral-900/90 p-1 border border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setMobileAnalysisView('charts')}
+                  className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                    mobileAnalysisView === 'charts'
+                      ? 'bg-neutral-800 text-neutral-100 shadow-sm'
+                      : 'text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>Monthly Charts</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobileAnalysisView('annual')}
+                  className={`flex-1 py-2 text-xs font-semibold rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                    mobileAnalysisView === 'annual'
+                      ? 'bg-neutral-800 text-emerald-300 shadow-sm'
+                      : 'text-neutral-400 hover:text-neutral-200'
+                  }`}
+                >
+                  <BarChart3 className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Annual Review (YoY)</span>
+                </button>
+              </div>
+
+              {mobileAnalysisView === 'charts' ? (
+                <div className="space-y-5">
+                  <ExpensePieChart
+                    transactions={filteredTransactions}
+                    expenseCategories={categories.expenseCategories}
+                    investmentCategories={categories.investmentCategories}
+                    height={240}
+                  />
+                  <TrendLineChart transactions={filteredTransactions} height={260} />
+                </div>
+              ) : (
+                <AnnualOverview
+                  transactions={transactions}
+                  selectedYear={selectedYear}
+                  onSelectYear={(yr) => {
+                    setSelectedYear(yr);
+                    setMobileAnalysisView('charts');
+                  }}
+                  spreadsheetId={config.spreadsheetId}
+                />
+              )}
             </div>
           )}
 
@@ -664,7 +799,7 @@ export default function App() {
           {mobileTab === 'history' && (
             <div className="space-y-4">
               <RecentTransactions
-                transactions={transactions}
+                transactions={filteredTransactions}
                 onDeleteTransaction={handleDeleteTransaction}
                 limit={50}
                 showControls={true}

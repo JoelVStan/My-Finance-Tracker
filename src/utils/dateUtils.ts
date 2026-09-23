@@ -175,3 +175,29 @@ export function formatMonthLabel(yearMonthKey: string, short = false): string {
     year: 'numeric',
   });
 }
+
+/**
+ * Returns the numeric 4-digit year from any date string
+ */
+export function getTransactionYear(raw: string | undefined | null): number | null {
+  const parts = parseDateParts(raw);
+  return parts ? parts.year : null;
+}
+
+/**
+ * Returns a sorted array of distinct years (descending, newest first)
+ * extracted from a list of transactions, always including the current year.
+ */
+export function getDistinctYears(dateList: (string | undefined | null)[]): number[] {
+  const currentYear = new Date().getFullYear();
+  const yearSet = new Set<number>([currentYear]);
+
+  dateList.forEach((d) => {
+    const yr = getTransactionYear(d);
+    if (yr && yr >= 2000 && yr <= 2100) {
+      yearSet.add(yr);
+    }
+  });
+
+  return Array.from(yearSet).sort((a, b) => b - a);
+}

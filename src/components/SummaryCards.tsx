@@ -7,6 +7,7 @@ interface SummaryCardsProps {
   totalInvestments?: number;
   netBalance: number;
   compact?: boolean;
+  periodLabel?: string;
 }
 
 export const SummaryCards: React.FC<SummaryCardsProps> = ({
@@ -15,6 +16,7 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
   totalInvestments = 0,
   netBalance,
   compact = false,
+  periodLabel,
 }) => {
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -46,9 +48,16 @@ export const SummaryCards: React.FC<SummaryCardsProps> = ({
         }`}
       >
         <div className="flex items-center justify-between">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
-            Net Savings / Cash
-          </span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+              Net Savings / Cash
+            </span>
+            {periodLabel && (
+              <span className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-neutral-800 text-neutral-300">
+                {periodLabel}
+              </span>
+            )}
+          </div>
           <div
             className={`w-7 h-7 rounded-lg flex items-center justify-center ${
               isNetPositive

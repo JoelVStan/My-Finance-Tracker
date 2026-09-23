@@ -144,61 +144,86 @@ export const TrendLineChart: React.FC<TrendLineChartProps> = ({
 
   const formatCurrency = (val: number) => `₹${val.toLocaleString('en-IN')}`;
 
+  const periodNet = useMemo(() => {
+    return trendData.reduce((acc, curr) => acc + curr.net, 0);
+  }, [trendData]);
+
   return (
     <div
       id="trend-line-chart-card"
-      className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5 flex flex-col justify-between overflow-hidden"
+      className="rounded-xl border border-neutral-800 bg-neutral-900/60 p-4 sm:p-5 flex flex-col justify-between overflow-hidden h-full"
     >
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-        <div>
-          <h3 className="text-sm font-semibold text-neutral-100 flex items-center gap-2">
-            <TrendingUp className="w-4 h-4 text-emerald-400" />
-            Cashflow &amp; Investment Trends
-          </h3>
-          <p className="text-xs text-neutral-400 mt-0.5">
-            Temporal comparison over {period === 'daily' ? 'recent days' : 'months'}
-          </p>
+      {/* Header Container */}
+      <div className="flex flex-col gap-2.5 mb-3">
+        {/* Top Row: Title & View Period Toggle */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-sm font-semibold text-neutral-100 flex items-center gap-1.5 whitespace-nowrap">
+              <TrendingUp className="w-4 h-4 text-emerald-400 shrink-0" />
+              <span>Cashflow &amp; Investment Trends</span>
+            </h3>
+          </div>
+
+          {/* View toggle (Daily vs Monthly) */}
+          <div className="inline-flex rounded-lg bg-neutral-950 p-0.5 border border-neutral-800 shrink-0">
+            <button
+              type="button"
+              id="toggle-daily-trend"
+              onClick={() => setPeriod('daily')}
+              className={`flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-medium rounded-md transition-all ${
+                period === 'daily'
+                  ? 'bg-neutral-800 text-neutral-100 shadow-sm'
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <Clock className="w-3 h-3" />
+              Daily
+            </button>
+            <button
+              type="button"
+              id="toggle-monthly-trend"
+              onClick={() => setPeriod('monthly')}
+              className={`flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-medium rounded-md transition-all ${
+                period === 'monthly'
+                  ? 'bg-neutral-800 text-neutral-100 shadow-sm'
+                  : 'text-neutral-400 hover:text-neutral-200'
+              }`}
+            >
+              <Calendar className="w-3 h-3" />
+              Monthly
+            </button>
+          </div>
         </div>
 
-        {/* View toggle */}
-        <div className="inline-flex items-center rounded-lg bg-neutral-800/80 p-0.5 border border-neutral-700/60 self-start sm:self-auto">
-          <button
-            type="button"
-            id="toggle-daily-trend"
-            onClick={() => setPeriod('daily')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-              period === 'daily'
-                ? 'bg-neutral-900 text-neutral-100 shadow-sm'
-                : 'text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5" />
-            Daily
-          </button>
-          <button
-            type="button"
-            id="toggle-monthly-trend"
-            onClick={() => setPeriod('monthly')}
-            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all ${
-              period === 'monthly'
-                ? 'bg-neutral-900 text-neutral-100 shadow-sm'
-                : 'text-neutral-400 hover:text-neutral-200'
-            }`}
-          >
-            <Calendar className="w-3.5 h-3.5" />
-            Monthly
-          </button>
+        {/* Sub Row: Context label & Net Flow Badge */}
+        <div className="flex items-center justify-between gap-2 pt-2 border-t border-neutral-800/70">
+          <p className="text-xs text-neutral-400 truncate">
+            {period === 'daily' ? 'Last 30 active days' : 'All recorded months'} • {trendData.length} data {trendData.length === 1 ? 'point' : 'points'}
+          </p>
+
+          <div className="flex items-baseline gap-1.5 shrink-0 bg-neutral-950/80 border border-neutral-800 rounded-lg px-2.5 py-1">
+            <span className="text-[11px] text-neutral-400 whitespace-nowrap">Net Flow:</span>
+            <span
+              className={`text-xs sm:text-sm font-bold whitespace-nowrap ${
+                periodNet >= 0 ? 'text-emerald-400' : 'text-rose-400'
+              }`}
+            >
+              ₹{periodNet.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
         </div>
       </div>
 
       {trendData.length === 0 ? (
-        <div className="h-56 flex flex-col items-center justify-center text-center p-4">
-          <TrendingUp className="w-8 h-8 text-neutral-600 mb-2" />
+        <div className="h-48 flex flex-col items-center justify-center text-center p-4 flex-1">
+          <div className="w-10 h-10 rounded-full bg-neutral-800 flex items-center justify-center text-neutral-400 mb-2">
+            <TrendingUp className="w-5 h-5 text-emerald-400/80" />
+          </div>
           <p className="text-sm font-medium text-neutral-300">No trend data available</p>
-          <p className="text-xs text-neutral-400 mt-1">Log transactions to plot temporal trends</p>
+          <p className="text-xs text-neutral-400 mt-1 max-w-xs">Log transactions to plot temporal cashflow trends.</p>
         </div>
       ) : (
-        <div className="w-full" style={{ height }}>
+        <div className="w-full mt-2 flex-1" style={{ height }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
               data={trendData}
